@@ -1,0 +1,31 @@
+{
+  "name": "oss-app-personalizer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Approval-gated desktop app for cloning, running, and personalizing open-source GitHub apps locally.",
+  "main": "dist/main/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "npm run electron:dev",
+    "renderer:dev": "vite --host 127.0.0.1 --port 5174 --strictPort",
+    "electron:dev": "concurrently -k \"tsc -p tsconfig.main.json --watch\" \"npm run renderer:dev\" \"wait-on tcp:5174 dist/main/main.js && APP_DEV_SERVER_URL=http://127.0.0.1:5174 electron .\"",
+    "build": "tsc -p tsconfig.main.json && vite build",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.main.json --noEmit"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.1.1",
+    "vite": "^7.2.7",
+    "typescript": "^5.9.3",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "electron": "^39.2.7",
+    "concurrently": "^9.2.1",
+    "wait-on": "^9.0.3",
+    "lucide-react": "^0.561.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.2",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3"
+  }
+}
