@@ -9,6 +9,10 @@ export type ApprovalKind =
 
 export type SetupStatus = "new" | "cloned" | "inspected" | "configured" | "running" | "error";
 
+export type BuildStatus = "draft" | "planned" | "building" | "ready" | "error";
+
+export type ReadinessStatus = "ready" | "missing" | "warning";
+
 export interface GitHubAccount {
   username: string;
   tokenStored: boolean;
@@ -47,6 +51,24 @@ export interface ManagedApp {
   createdAt: string;
   updatedAt: string;
   lastLocalUrl?: string;
+  patchArtifactPath?: string;
+  softwareRequest?: string;
+  researchUrls?: string[];
+  buildStatus?: BuildStatus;
+}
+
+export interface ReadinessItem {
+  id: "github" | "git-identity" | "codex" | "workspace" | "disk";
+  label: string;
+  status: ReadinessStatus;
+  detail: string;
+}
+
+export interface OnboardingState {
+  items: ReadinessItem[];
+  workspaceRoot: string;
+  ready: boolean;
+  lastCheckedAt: string;
 }
 
 export interface ApprovalRequest {
@@ -94,11 +116,19 @@ export interface AppState {
   apps: ManagedApp[];
   approvals: ApprovalRequest[];
   logs: CommandLog[];
+  onboarding?: OnboardingState;
 }
 
 export interface CreateAppInput {
   repoUrl: string;
   title?: string;
+}
+
+export interface CreateSoftwareInput {
+  request: string;
+  repoUrl?: string;
+  title?: string;
+  researchUrls?: string[];
 }
 
 export interface EnvUpdateInput {

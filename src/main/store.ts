@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { app } from "electron";
-import type { AppState, ManagedApp, ApprovalRequest, CommandLog, GitHubAccount } from "../shared/types.js";
+import type { AppState, ManagedApp, ApprovalRequest, CommandLog, GitHubAccount, OnboardingState } from "../shared/types.js";
 
 const initialState: AppState = {
   apps: [],
@@ -39,6 +39,12 @@ export class Store {
 
   async setAccount(account: GitHubAccount) {
     this.state.account = account;
+    await this.save();
+    return this.snapshot();
+  }
+
+  async setOnboarding(onboarding: OnboardingState) {
+    this.state.onboarding = onboarding;
     await this.save();
     return this.snapshot();
   }

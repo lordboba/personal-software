@@ -9,11 +9,11 @@ async function git(args, cwd) {
     const result = await exec("git", args, { cwd });
     return result.stdout.trim();
 }
-export async function cloneApp(input) {
+export async function cloneApp(input, workspaceRoot = appsRoot()) {
     const parsed = parseGitHubUrl(input.repoUrl);
     const title = sanitizeTitle(input.title || parsed.repo);
-    const localPath = path.join(appsRoot(), title);
-    await fs.mkdir(appsRoot(), { recursive: true });
+    const localPath = path.join(workspaceRoot, title);
+    await fs.mkdir(workspaceRoot, { recursive: true });
     try {
         await fs.access(localPath);
         throw new Error(`App folder already exists: ${localPath}`);

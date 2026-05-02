@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Store } from "./store.js";
@@ -7,8 +7,11 @@ import { CommandRunner } from "./services/commandRunner.js";
 import { GitHubService } from "./services/githubService.js";
 import { LocalFileEnvProvider } from "./services/envService.js";
 import { proposePersonalization } from "./services/agentService.js";
+import { writePatchArtifact } from "./services/patchArtifactService.js";
+import { getOnboardingStateForWorkspace, setGitIdentity } from "./services/onboardingService.js";
+import { createSoftwareProject } from "./services/softwareBuilderService.js";
 import { id, nowIso } from "./utils.js";
-import type { ApprovalRequest, CreateAppInput, EnvEntry } from "../shared/types.js";
+import type { ApprovalRequest, CreateAppInput, CreateSoftwareInput, EnvEntry } from "../shared/types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
@@ -18,6 +21,13 @@ const github = new GitHubService();
 const envProvider = new LocalFileEnvProvider();
 const runner = new CommandRunner(store);
 
+async function refreshOnboarding() {
+  const snapshot = store.snapshot();
+  const workspaceRoot = snapshot.onboarding?.workspaceRoot;
+  await store.setOnboarding(await getOnboardingStateForWorkspace(snapshot.account, workspaceRoot ?? path.join(app.getPath("home"), "Apps")));
+  return store.snapshot();
+}
+
 async function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
@@ -26,7 +36,7 @@ async function createWindow() {
     minHeight: 680,
     title: "OSS App Personalizer",
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -37,6 +47,22 @@ async function createWindow() {
   } else {
     await win.loadFile(path.join(__dirname, "../renderer/index.html"));
   }
+}
+
+async function createResearchWindow(target: string) {
+  const win = new BrowserWindow({
+    width: 1180,
+    height: 820,
+    minWidth: 860,
+    minHeight: 620,
+    title: "Personal Software Research",
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  await win.loadURL(target);
 }
 
 function approval(input: Omit<ApprovalRequest, "id" | "createdAt" | "status">): ApprovalRequest {
@@ -50,6 +76,7 @@ function approval(input: Omit<ApprovalRequest, "id" | "createdAt" | "status">): 
 
 app.whenReady().then(async () => {
   await store.load();
+  await refreshOnboarding();
   await createWindow();
 });
 
@@ -59,13 +86,50 @@ app.on("window-all-closed", () => {
 
 ipcMain.handle("state:get", () => store.snapshot());
 
+ipcMain.handle("onboarding:refresh", async () => {
+  return refreshOnboarding();
+});
+
+ipcMain.handle("onboarding:setGitIdentity", async (_event, input: { name: string; email: string }) => {
+  await setGitIdentity(input);
+  return refreshOnboarding();
+});
+
+ipcMain.handle("onboarding:selectWorkspace", async () => {
+  const current = store.snapshot().onboarding?.workspaceRoot ?? path.join(app.getPath("home"), "Apps");
+  const result = await dialog.showOpenDialog({
+    title: "Choose Personal Software Workspace",
+    defaultPath: current,
+    properties: ["openDirectory", "createDirectory"]
+  });
+  if (result.canceled || !result.filePaths[0]) return store.snapshot();
+  await store.setOnboarding(await getOnboardingStateForWorkspace(store.snapshot().account, result.filePaths[0]));
+  return store.snapshot();
+});
+
 ipcMain.handle("github:connect", async (_event, input: { token: string; username: string }) => {
-  await store.setAccount(github.connect(input.token, input.username));
+  await store.setAccount(await github.connect(input.token, input.username));
+  return refreshOnboarding();
+});
+
+ipcMain.handle("software:create", async (_event, input: CreateSoftwareInput) => {
+  const appRecord = await createSoftwareProject(input, store.snapshot().onboarding?.workspaceRoot);
+  await store.upsertApp(appRecord);
+  await store.addApproval(
+    approval({
+      appId: appRecord.id,
+      kind: input.repoUrl ? "clone" : "edit",
+      title: `Created ${appRecord.title}`,
+      detail: input.repoUrl
+        ? `Seeded from ${input.repoUrl}, created .personal-software/PATCH.md, and prepared local build commands.`
+        : `Created a new local software project at ${appRecord.localPath} with .personal-software/PATCH.md.`
+    })
+  );
   return store.snapshot();
 });
 
 ipcMain.handle("app:clone", async (_event, input: CreateAppInput) => {
-  const appRecord = await cloneApp(input);
+  const appRecord = await cloneApp(input, store.snapshot().onboarding?.workspaceRoot);
   await store.upsertApp(appRecord);
   await store.addApproval(
     approval({
@@ -140,10 +204,20 @@ ipcMain.handle("agent:personalize", async (_event, input: { appId: string; reque
     })
   );
   await createPersonalizationBranch(appRecord, branch);
+  const patchPath = await writePatchArtifact(appRecord, input.request, branch);
   appRecord.currentBranch = branch;
+  appRecord.patchArtifactPath = patchPath;
   appRecord.updatedAt = nowIso();
   await store.upsertApp(appRecord);
   return store.snapshot();
 });
 
 ipcMain.handle("shell:openPath", (_event, target: string) => shell.openPath(target));
+
+ipcMain.handle("browser:research", async (_event, input: { query?: string; url?: string }) => {
+  const target =
+    input.url ||
+    `https://www.google.com/search?q=${encodeURIComponent(input.query || "software product research")}`;
+  await createResearchWindow(target);
+  return target;
+});

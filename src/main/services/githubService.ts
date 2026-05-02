@@ -4,10 +4,22 @@ import { nowIso } from "../utils.js";
 export class GitHubService {
   private token?: string;
 
-  connect(token: string, username: string): GitHubAccount {
+  async connect(token: string, username: string): Promise<GitHubAccount> {
     this.token = token;
+    const response = await fetch("https://api.github.com/user", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28"
+      }
+    });
+    if (!response.ok) {
+      this.token = undefined;
+      throw new Error(`GitHub authentication failed: ${response.status} ${await response.text()}`);
+    }
+    const body = (await response.json()) as { login?: string };
     return {
-      username,
+      username: body.login || username,
       tokenStored: Boolean(token),
       connectedAt: nowIso()
     };

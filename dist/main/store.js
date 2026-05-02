@@ -35,6 +35,11 @@ export class Store {
         await this.save();
         return this.snapshot();
     }
+    async setOnboarding(onboarding) {
+        this.state.onboarding = onboarding;
+        await this.save();
+        return this.snapshot();
+    }
     async upsertApp(appRecord) {
         const index = this.state.apps.findIndex((item) => item.id === appRecord.id);
         if (index >= 0)

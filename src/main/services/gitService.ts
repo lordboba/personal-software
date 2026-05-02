@@ -13,11 +13,11 @@ async function git(args: string[], cwd?: string) {
   return result.stdout.trim();
 }
 
-export async function cloneApp(input: CreateAppInput): Promise<ManagedApp> {
+export async function cloneApp(input: CreateAppInput, workspaceRoot = appsRoot()): Promise<ManagedApp> {
   const parsed = parseGitHubUrl(input.repoUrl);
   const title = sanitizeTitle(input.title || parsed.repo);
-  const localPath = path.join(appsRoot(), title);
-  await fs.mkdir(appsRoot(), { recursive: true });
+  const localPath = path.join(workspaceRoot, title);
+  await fs.mkdir(workspaceRoot, { recursive: true });
 
   try {
     await fs.access(localPath);
